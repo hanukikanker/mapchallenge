@@ -1,0 +1,195 @@
+---
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+**The task this week is to:**
+
+-   Read in [global gender inequality
+    data](https://hdr.undp.org/data-center/documentation-and-downloads)
+
+-   Join the global gender inequality index to [spatial data of the
+    World](https://hub.arcgis.com/datasets/2b93b06dc0dc4e809d3c8db5cb96ba69_0/explore?location=-2.688200%2C0.000000%2C1.41),
+    creating a new column of difference in inequality between 2010 and
+    2019
+
+-   Share it with the World on GitHub
+
+-   Add you repository URL to the circulated spreadsheet
+
+[**Tip:**]{.underline}
+
+-   The [countrycode](https://github.com/vincentarelbundock/countrycode)
+    R package will be helpful!
+
+-   The gender inequality has changed in the last year, you will find
+    what you need in the "All composite indices and components time
+    series (1990-2021)" dataset, the metadata file beneath it will
+    explain what the columns are.
+
+------------------------------------------------------------------------
+
+### Install packages and load them in
+
+```{r include=FALSE}
+
+# install packages
+install.packages('remotes')
+#load packages
+library(sf)
+library(tidyverse)
+library(janitor)
+library(terra)
+library(here)
+library(remotes)
+install_github('vincentarelbundock/countrycode')
+library(countrycode)
+library(tmap)
+library(sf)
+```
+
+------------------------------------------------------------------------
+
+### Read the necessary data
+
+```{r}
+#Read hdr data and manipulate to produce gii_diff_c
+hdrdata <-
+  read_csv(here("data",
+    "HDR21-22_Composite_indices_complete_time_series.csv"
+  )) %>%
+  dplyr::select(c("iso3", "country", "region", "gii_2010", "gii_2019","gdi_2010", "gdi_2019","hdi_2010", "hdi_2019"))
+
+# change column type as numeric
+
+hdrdata$gii_2010 <- as.numeric(hdrdata$gii_2010)
+hdrdata$gii_2019 <- as.numeric(hdrdata$gii_2019)
+hdrdata$gdi_2010 <- as.numeric(hdrdata$gdi_2010)
+hdrdata$gdi_2019 <- as.numeric(hdrdata$gdi_2019)
+hdrdata$hdi_2010 <- as.numeric(hdrdata$hdi_2010)
+hdrdata$hdi_2019 <- as.numeric(hdrdata$hdi_2019)
+```
+
+```{r}
+View(world)
+```
+
+```{r}
+#Read world map & join it with hdr data
+world <-
+  st_read(here("data", "World_Countries_Generalized.geojson")) %>%
+  dplyr::mutate(iso3 = countrycode(ISO, origin = 'iso2c', destination =
+                                     'iso3c'),
+                .before = ISO) %>%
+  dplyr::left_join(., hdrdata, by = 'iso3') %>%
+  dplyr::mutate(gii_diff = gii_2019 - gii_2010) %>%
+  dplyr::mutate(
+    gii_diff_c = case_when(
+      gii_diff > 0 ~ "More unequal",
+      gii_diff == 0 ~ "No change",
+      gii_diff < 0 ~ "More equal",
+      is.na(gii_diff) ~ "No Data"
+    )
+  ) %>%
+  dplyr::mutate(hdi_diff = hdi_2019 - hdi_2010) %>%
+  dplyr::mutate(
+    hdi_diff_c = case_when(
+      hdi_diff > 0 ~ "Higher HDI",
+      hdi_diff == 0 ~ "No change",
+      hdi_diff < 0 ~ "Lower HDI",
+      is.na(hdi_diff) ~ "No Data"
+    )
+  ) %>%
+  dplyr::mutate(gdi_diff = gdi_2019 - gdi_2010) %>%
+  dplyr::mutate(
+    gdi_diff_c = case_when(
+      gdi_diff > 0 ~ "Higher GDI",
+      gdi_diff == 0 ~ "No change",
+      gdi_diff < 0 ~ "Lower GDI",
+      is.na(gdi_diff) ~ "No Data"
+    )
+  ) %>%
+  dplyr::mutate(
+    gdi_gii = case_when(
+      (gdi_diff > 0 & 
+         gii_diff < 0) ~ "Better GDI and GII",
+      (gdi_diff <= 0 &
+         gii_diff >= 0) ~ "Worsened GDI and GII",
+      (gdi_diff > 0 &
+         gii_diff >= 0) ~ "Better GDI BUT worsened GII",
+      (gdi_diff <= 0 & 
+         gii_diff < 0) ~ "Worsened GDI BUT better GII",
+      is.na(gdi_diff) | 
+        is.na(gii_diff) ~ "No Data"
+    )
+  ) %>%
+  dplyr::mutate(gdi_gii = factor(
+    gdi_gii,
+    levels = c(
+      "Better GDI and GII",
+      "Worsened GDI and GII",
+      "Better GDI BUT worsened GII",
+      "Worsened GDI BUT better GII",
+      "No Data"
+    )
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+### Plot gdi_gii in the Static Map
+
+```{r}
+tmap_mode("plot")
+tmap_mode("view")
+```
+
+```{r}
+install.packages("providers")
+library(providers)
+```
+
+```{r}
+tm_gdi_gii <- tm_shape(world) +
+  tm_polygons(
+    "gdi_gii",
+    title = "Change from 2010 to 2019",
+    border.col = "lightgrey",
+    palette = c("grey", "darkgrey", "darkred", "red", "white")
+  ) +
+  
+  tm_legend(show = TRUE) +
+  tm_credits(text = "Shaun Hoang | Source: UN Data",
+             size = 0.5,
+             position = c(0.75, 0.05)) +
+  tm_credits(
+    text = "GDI: Gender Development Index\nGII: Gender Inequality Index",
+    size = 0.5,
+    position = c(0.03, 0.92),
+    fontface = "italic",
+    bg.color = "white",
+    bg.alpha = 0.5
+  ) +
+  tm_layout(
+    main.title = "Battle of the indices: GDI vs GII to measure gender inequalities",
+    main.title.size = 0.8,
+    main.title.fontface = "bold",
+    main.title.position = c(0.03, 0.85),
+    legend.title.size = 0.7,
+    legend.position = c(0.03, 0.13),
+    legend.text.size = 0.5,
+    frame = FALSE
+  )+
+  tm_view(view.legend.position = c("left", "bottom"),
+          control.position =  c("right", "bottom")
+          ) 
+tm_gdi_gii
+
+
+```
+
+```{r}
+tmap_save(tm_gdi_gii,)
+```

@@ -1,0 +1,58 @@
+```{r}
+library(sf)
+library(janitor)
+library(dplyr)
+library(tmap)
+library(tmaptools)
+library(showtext)
+library(rmapshaper)
+library(here)
+library(terra)
+font_add_google("Fira Sans")
+showtext_auto()
+```
+
+```{r}
+# load file
+
+station_exits <-
+  st_read(here(
+    "data",
+    "TrainStationExit_Aug2023",
+    "Train_Station_Exit_Layer.shp"
+  )) %>% 
+  filter(.$stn_name == "RAFFLES PLACE MRT STATION") %>% 
+  st_set_crs(., 3414)
+
+station <-
+  st_read(here(
+    "data",
+    "TrainStation_Feb2023",
+    "RapidTransitSystemStation.shp"
+  )) %>% 
+  filter(.$STN_NAM_DE == "RAFFLES PLACE MRT STATION")%>% 
+  st_set_crs(., 3414)
+
+# load Singapore
+singa_shape <- st_read(here("data","singabound","SGP_adm0.shp"))%>%
+  simplify_shape(., fact = 0.1) %>% 
+  st_transform(.,3414)
+
+# load Singapore base map from OSM
+# install.packages("OpenStreetMap")
+library(OpenStreetMap)
+
+tmapstation <- singa_shape %>%
+  read_osm(., type = "osm", zoom = NULL)
+
+plot(station) 
+plot(station_exits)
+```
+
+```{r}
+tmap_mode("plot")
+
+tm_shape(singa_shape) +
+  tm_polygons(station)
+
+```
