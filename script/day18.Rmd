@@ -1,0 +1,272 @@
+Load libraries
+
+```{r}
+library(sf) 
+library(here)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(raster) 
+library(terra)
+library(fs)
+library(ggplot2)
+```
+Read Vietnam outline shapefile
+
+```{r}
+vietnamoutline <- st_read(here(
+  "data",
+  "vnm_adm_gov_20201027",
+  "vnm_admbnda_adm0_gov_20200103.shp"
+))
+st_crs(vietnamoutline)$proj4string # Check projection
+plot(vietnamoutline) # Plot
+```
+Read raster file
+
+```{r}
+future21_40 <-
+  terra::rast(
+    here("data", "wc2.1_2.5m_tmax_ACCESS-CM2_ssp370_2021-2040.tif")
+  )
+
+future41_60 <-
+  terra::rast(
+    here("data", "wc2.1_2.5m_tmax_ACCESS-CM2_ssp370_2041-2060.tif")
+  )
+
+future61_80 <-
+  terra::rast(
+    here("data", "wc2.1_2.5m_tmax_ACCESS-CM2_ssp370_2061-2080.tif")
+  )
+
+future81_00 <-
+  terra::rast(
+    here("data", "wc2.1_2.5m_tmax_ACCESS-CM2_ssp370_2081-2100.tif")
+  )
+```
+Rename each layer into month
+```{r}
+month <-
+  c("Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec")
+
+names(future21_40) <- month
+names(future41_60) <- month
+names(future61_80) <- month
+names(future81_00) <- month
+```
+
+Use a shape instead of point to carve out data from raster
+```{r}
+vietnamoutline %>% 
+  st_simplify(.,dTolerance = 5000) %>% 
+  st_geometry()%>% 
+  plot()
+
+crs(vietnamoutline)
+```
+Crop and mask
+```{r}
+
+vntemp21_40 <- future21_40 %>% 
+  terra::crop(.,vietnamoutline) %>% 
+  terra::mask(.,vietnamoutline)
+vntemp41_60 <- future41_60 %>% 
+  terra::crop(.,vietnamoutline) %>% 
+  terra::mask(.,vietnamoutline)
+vntemp61_80 <- future61_80 %>% 
+  terra::crop(.,vietnamoutline) %>% 
+  terra::mask(.,vietnamoutline)
+vntemp81_00 <- future81_00 %>% 
+  terra::crop(.,vietnamoutline) %>% 
+  terra::mask(.,vietnamoutline)
+```
+Convert to tibble and dataframes
+
+```{r}
+vntemp_tib <- vntemp %>% 
+  as_tibble()
+
+vntemp_df <- vntemp %>% 
+  as.data.frame()
+```
+
+Extract July
+```{r}
+jul2140 <- vntemp21_40[[7]]
+jul4160 <- vntemp41_60[[7]]
+jul6180 <- vntemp61_80[[7]]
+jul8100 <- vntemp81_00[[7]]
+
+plot(
+  jul2140,
+  axes = FALSE,
+  main = "Temperature forecast in July 2021-2040",
+  range = c(20, 45),
+  plg = list(shrink = 0.8)
+)
+plot(
+  jul4160,
+  axes = FALSE,
+  main = "Temperature forecast in July 2041-2040",
+  range = c(20, 45),
+  plg = list(shrink = 0.8)
+)
+plot(
+  jul6180,
+  axes = FALSE,
+  main = "Temperature forecast in July 2021-2040",
+  range = c(20, 45),
+  plg = list(shrink = 0.8)
+)
+plot(
+  jul8100,
+  axes = FALSE,
+  main = "Temperature forecast in July 2021-2040",
+  range = c(20, 45),
+  plg = list(shrink = 0.8)
+)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Pivot longer so that we have multiple months on the histogram and not just one
+
+squishdata\<-exactAusdf%\>% pivot_longer( cols = 1:12, names_to = "Month", values_to = "Temp" )
+
+# Subsetting two months
+
+twomonths \<- squishdata %\>% filter(., Month=="Jan" \| Month=="Jun")
+
+# mean two months
+
+meantwomonths \<- twomonths %\>% group_by(Month) %\>% summarise(mean=mean(Temp, na.rm=TRUE))
+
+meantwomonths
+
+# PLot them nicely!
+
+ggplot(twomonths, aes(x=Temp, color=Month, fill=Month)) + geom_histogram(position="identity", alpha=0.5)+ geom_vline(data=meantwomonths, aes(xintercept=mean, color=Month), linetype="dashed")+ labs(title="Ggplot2 histogram of Australian Jan and Jun temperatures", x="Temperature", y="Frequency")+ theme_classic()+ theme(plot.title = element_text(hjust = 0.5))
+
+# Plot all 12 months!
+
+data_complete_cases \<- squishdata %\>% drop_na()%\>% mutate(Month = factor(Month, levels = c("Jan","Feb","Mar", "Apr","May","Jun", "Jul","Aug","Sep", "Oct","Nov","Dec"))) view(data_complete_cases)
+
+# Plot faceted histogram
+
+ggplot(data_complete_cases, aes(x=Temp, na.rm=TRUE))+ geom_histogram(color="black", binwidth = 5)+ labs(title="Ggplot2 faceted histogram of Australian temperatures", x="Temperature", y="Frequency")+ facet_grid(Month \~ .)+ theme(plot.title = element_text(hjust = 0.5))
+
+# Using plotly
+
+library(plotly)
+
+jan \<- squishdata %\>% drop_na() %\>% filter(., Month=="Jan")
+
+jun \<- squishdata %\>% drop_na() %\>% filter(., Month=="Jun")
+
+# give axis titles
+
+x \<- list (title = "Temperature") y \<- list (title = "Frequency")
+
+# set the bin width
+
+xbinsno\<-list(start=0, end=40, size = 2.5)
+
+# plot the histogram calling all the variables we just set
+
+ihist \<- plot_ly(alpha = 0.6) %\>% add_histogram(x = jan$Temp,  xbins=xbinsno, name="January") %>%  add_histogram(x = jun$Temp, xbins=xbinsno, name="June") %\>% layout(barmode = "overlay", xaxis=x, yaxis=y)
+
+ihist
+
+# mean per month
+
+meanofall \<- squishdata %\>% group_by(Month) %\>% summarise(mean = mean(Temp, na.rm=TRUE))
+
+# print the top 1
+
+head(meanofall, n=1)
+
+# standard deviation per month
+
+sdofall \<- squishdata %\>% group_by(Month) %\>% summarize(sd = sd(Temp, na.rm=TRUE))
+
+# maximum per month
+
+maxofall \<- squishdata %\>% group_by(Month) %\>% summarize(max = max(Temp, na.rm=TRUE))
+
+# minimum per month
+
+minofall \<- squishdata %\>% group_by(Month) %\>% summarize(min = min(Temp, na.rm=TRUE))
+
+# Interquartlie range per month
+
+IQRofall \<- squishdata %\>% group_by(Month) %\>% summarize(IQR = IQR(Temp, na.rm=TRUE))
+
+# perhaps you want to store multiple outputs in one list..
+
+lotsofstats \<- squishdata %\>% group_by(Month) %\>% summarize(mean = mean(Temp, na.rm=TRUE), max=max(Temp, na.rm=T), min = min(Temp, na.rm=TRUE), sd = sd(Temp, na.rm=TRUE), IQR = IQR(Temp, na.rm=TRUE))
+
+view(lotsofstats)
+
+# or you want to know the mean (or some other stat)
+
+# for the whole year as opposed to each month...
+
+meanwholeyear \<- squishdata %\>% summarize(mean = mean(Temp, na.rm=TRUE), max=max(Temp, na.rm=T), min = min(Temp, na.rm=TRUE), sd = sd(Temp, na.rm=TRUE), IQR = IQR(Temp, na.rm=TRUE))
+
+view(meanwholeyear)
+
+\`\`\`
+
+Using a raster stack we can extract data with a single command!! For example let's make a dataframe of some sample sites --- Vietnam cities/towns
+
+```{r}
+worldcities <- st_read(
+  here("..", "gis",
+       "data",
+       "World_Cities.geojson")
+)
+
+vn_cities <- worldcities %>%
+  dplyr::filter(., .$CNTRY_NAME == "Vietnam") %>%
+  dplyr::select(., c("CITY_NAME", "geometry"))
+vn_cities
+```
+Extract the data from the Rasterstack for all points
+
+```{r}
+vncitytemp <- terra::extract(future21_40, vn_cities) %>%
+  as_tibble() %>%
+  add_column(Site = vn_cities$CITY_NAME, .before = "Jan")
+View(vncitytemp)
+```
