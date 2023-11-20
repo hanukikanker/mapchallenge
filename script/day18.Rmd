@@ -111,31 +111,43 @@ jul8100 <- vntemp81_00[[7]]
 
 plot(
   jul2140,
+  col= rev(heat.colors(999)),
   axes = FALSE,
   main = "Temperature forecast in July 2021-2040",
-  range = c(20, 45),
-  plg = list(shrink = 0.8)
+  cex.main = 0.8,
+  range = c(20, 50),
+  plg = list(shrink = 0.8,
+             title = "°C")
 )
 plot(
   jul4160,
+  col= rev(heat.colors(999)),
   axes = FALSE,
-  main = "Temperature forecast in July 2041-2040",
-  range = c(20, 45),
-  plg = list(shrink = 0.8)
+  main = "Temperature forecast in July 2041-2060",
+  cex.main = 0.8,
+  range = c(20, 50),
+  plg = list(shrink = 0.8,
+             title = "°C")
 )
 plot(
   jul6180,
+  col= rev(heat.colors(999)),
   axes = FALSE,
-  main = "Temperature forecast in July 2021-2040",
-  range = c(20, 45),
-  plg = list(shrink = 0.8)
+  main = "Temperature forecast in July 2061-2080",
+  cex.main = 0.8,
+  range = c(20, 50),
+  plg = list(shrink = 0.8,
+             title = "°C")
 )
 plot(
   jul8100,
+  col= rev(heat.colors(999)),
   axes = FALSE,
-  main = "Temperature forecast in July 2021-2040",
-  range = c(20, 45),
-  plg = list(shrink = 0.8)
+  main = "Temperature forecast in July 2081-2100",
+  cex.main = 0.8,
+  range = c(20, 50),
+  plg = list(shrink = 0.8,
+             title = "°C")
 )
 
 ```
