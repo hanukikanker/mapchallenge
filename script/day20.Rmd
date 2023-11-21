@@ -1,0 +1,204 @@
+---
+title: "day20"
+output: html_document
+date: "2023-11-20"
+---
+
+```{r}
+# install.packages('rgee')
+# install.packages('reticulate')
+# install.packages("giscoR")
+# install.packages("elevatr")
+# install.packages("magick")
+# install.packages("remotes")
+# remotes::install_github("tylermorganwall/rayshader",force=T)
+# remotes::install_github("tylermorganwall/rayrender",force=T)
+```
+
+```{r}
+library(rgee)
+library(reticulate)
+library(magick)
+```
+
+```{r}
+reticulate::py_available()
+reticulate::py_discover_config()
+reticulate::py_install(c("numpy",
+                       "anaconda",
+                       "ee",
+                       "earthengine-api"))
+```
+
+```{r}
+rgee::ee_install_set_pyenv(
+  py_path="C:/Users/shaun/Documents/.virtualenvs/r-reticulate/Scripts/python.exe",
+  py_env="rgee"
+) # Install Python environment
+```
+
+```{r}
+rgee::ee_check() # Check all de1pendencies in order to run EE
+rgee::ee_install_upgrade() # Get latest version
+```
+
+```{r}
+rgee::ee_Initialize(
+  user="shaun.hoang@gmail.com"
+) # Sign in
+```
+
+```{r}
+library(giscoR)
+library(elevatr)
+library(rayshader)
+library(rayrender)
+```
+
+```{r}
+#Get bounds
+
+crs_lambert <- "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +datum=WGS84 +units=m +no_frfs"
+
+germany_sf <- giscoR::gisco_get_countries(
+  country = "DE",
+  resolution = "3"
+) # get country shape
+
+germany_sf_lambert <-germany_sf %>% 
+  sf::st_transform(
+    crs_lambert
+  )
+
+germany_bbox <- sf::st_bbox(
+  germany_sf
+) # create bound box
+
+germany_bounds <- ee$Geometry$Rectangle(
+  c(
+    west = germany_bbox[["xmin"]],
+    south = germany_bbox[["ymin"]],
+    east = germany_bbox[["xmax"]],
+    north = germany_bbox[["ymax"]]
+  ),
+  geodetic = TRUE,
+  proj = "EPSG:4326"
+) # create bound box that EE can read
+
+plot(germany_sf)
+```
+
+```{r}
+# Get data
+
+solarpanel_data <- ee$FeatureCollection(
+  "projects/sat-io/open-datasets/global_photovoltaic/predicted_set"
+  )$
+  filterBounds(
+    germany_bounds
+  )
+
+rgee::ee_print(solarpanel_data)
+
+solarpanel_germany <- rgee::ee_as_sf(
+  solarpanel_data,
+  maxFeatures = 10000
+) %>%
+  sf::st_transform(
+    crs_lambert
+)
+
+plot(solarpanel_germany)
+```
+
+```{r}
+# Get elevation
+
+elev <- elevatr::get_elev_raster(
+  locations = germany_sf,
+  z=6,clip = "locations"
+)
+
+elev_lambert <- elev %>% 
+  terra::rast() %>% 
+  terra::project(
+    crs_lambert
+  )
+  
+elmat <- rayshader::raster_to_matrix(elev_lambert)
+```
+
+```{r}
+
+library(RColorBrewer)
+library(colorspace)
+colors = brewer.pal(n=9, name = "PuRd")
+texture <- grDevices::colorRampPalette(colors, bias = 1)(500)
+swatchplot(texture)
+
+
+# Render
+
+h <- nrow(elev_lambert)
+w <- ncol(elev_lambert)
+
+# elmat[is.na(elmat)]<-0
+rgl::close3d() # Close 
+
+
+elmat %>% 
+  rayshader::height_shade(
+    texture = texture
+    )%>% 
+  
+  rayshader::add_shadow(
+    rayshader::ray_shade(elmat,zscale=3
+              ),0.1
+    ) %>%
+  
+  rayshader::add_overlay(
+    rayshader::generate_polygon_overlay(
+      solarpanel_germany,
+      palette = "red",
+      linecolor  = "gold",
+      linewidth = 3,
+      extent = germany_sf_lambert,
+      heightmap = elmat
+    )
+  ) %>%
+
+  rayshader::plot_3d(
+    elmat,
+    zscale = 3,
+    solid = F,
+    shadow = T,
+    shadow_darkness = 1,
+    background ="white",
+    windowsize = c(
+      w/3,
+      h/3
+    ),
+    zoom = .515,
+    phi = 87,
+    theta = 0
+  )
+```
+
+```{r}
+# library(here)
+# here("data","air_museum_playground_4k.hdr")
+# 
+# rgl::rglwidget() # Required to show the window in an RStudio Notebook
+# rayshader::render_highquality(
+#   filename = "day20.png",
+#   preview = T,
+#   light = F,
+#   environment_light = here("data","air_museum_playground_4k.hdr"),
+#   intensity_env = 1,
+#   rotate_env = 90,
+#   interactive = F,
+#   parallel = F,
+#   width = w,
+#   height = h,
+# )
+```
