@@ -1,0 +1,109 @@
+Load libraries
+
+```{r}
+library(sf) 
+library(here)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(raster) 
+library(terra)
+library(fs)
+library(ggplot2)
+```
+
+Read raster file
+
+```{r}
+library(tidyverse)
+listfiles <- dir_info(here("data", "ice")) %>%
+  filter(str_detect(path, ".TIFF")) %>%
+  dplyr::select(path)%>%
+  pull() #similar to $ used to select columns
+
+listfiles
+
+# load all files into one single raster stack
+world_ice <- listfiles %>%
+  terra::rast()
+
+#have a look at the raster stack
+world_ice
+```
+
+```{r}
+library(tidyverse)
+listfiles <- dir_info(here("data", "fire")) %>%
+  filter(str_detect(path, ".TIFF")) %>%
+  dplyr::select(path)%>%
+  pull() #similar to $ used to select columns
+
+listfiles
+
+# load all files into one single raster stack
+world_fire <- listfiles %>%
+  terra::rast()
+
+#have a look at the raster stack
+world_fire
+```
+
+Rename each layer into month
+
+```{r}
+month <-
+  c("January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December")
+
+names(world_ice) <- month
+names(world_fire) <- month
+```
+
+```{r}
+for (i in (1:12)){
+  plot(world_fire[[i]],
+       axes = FALSE)
+  plot(world_ice[[i]],
+       axes = FALSE,
+       add = TRUE)
+  text(
+    0,-55,
+    names(world_fire[[i]]),
+    col = "white"
+    )
+  }
+```
+
+```{r}
+
+library(magick)
+
+## list file names and read in
+imgs <- list.files(here("output","new"), full.names = TRUE)
+img_list <- lapply(imgs, image_read)
+
+## join the images together
+img_joined <- image_join(img_list)
+
+## animate at 2 frames per second
+img_animated <- image_animate(img_joined, fps = 1)
+
+## view animated image
+img_animated
+
+## save to disk
+image_write(image = img_animated,
+            path = here("output","day21.gif"))
+```
+
+\
