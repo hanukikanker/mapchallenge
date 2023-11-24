@@ -1,0 +1,199 @@
+**Install libraries**
+
+```{r}
+libs <- c(
+  "terra","sf"
+)
+
+installed_libraries <- libs %in% rownames(
+  installed.packages()
+) 
+
+if(any(installed_libraries ==F)){
+    install.packages(
+      libs[!installed_libraries]
+    )
+  }
+  
+invisible(
+  lapply(
+    libs, library,
+    character.only=T
+  )
+) 
+```
+
+```{r}
+# install.packages("remotes")
+# remotes::install_github("tylermorganwall/rayshader", force = T)
+
+# library(rayshader)
+
+# remove.packages('rayshader')
+# install.packages('devtools')
+# devtools::install_version("rayshader", version = "0.35.7", repos = "http://cran.r-project.org")
+library(rayshader)
+
+# remotes::install_github("tylermorganwall/rayrender", force = T)
+```
+
+**Load LiDAR Raster data**
+
+```{r}
+
+lidar_url <- 'https://ns_hwh.fundaments.nl/hwh-ahn/ahn4/03a_DSM_0.5m/R_37HN1.zip'
+lidar_file <- basename(lidar_url) # Get file name
+
+options(timeout = max(1000, getOption("timeout"))) # increase max timeout
+download.file(
+  url = lidar_url,
+  destfile = lidar_file,
+  mode = 'wb'
+)
+unzip(lidar_file)
+
+lidar_rast <- terra::rast(
+  paste0(
+    gsub(
+      '\\..*',"",
+      lidar_file
+      ),'.tif'
+  )
+) #  Import raster
+```
+
+**Load ortho Raster data**
+
+```{r}
+
+ortho_rast <- terra::rast(
+  'https://geotiles.citg.tudelft.nl/Luchtfoto_2023/RGB_37HN1.tiff'
+)
+
+ortho_rast
+```
+
+**Crop area around Erasmus Bridge**
+
+```{r}
+
+coords <- data.frame(
+  long = 4.4822212,
+  lat = 51.9090041
+) %>% 
+  sf::st_as_sf(
+    coords = c(
+      "long","lat"
+      ),
+    crs = sf::st_crs(4326) # Set CRS
+  ) %>% 
+  sf::st_transform(
+    crs = terra::crs(
+      ortho_rast
+    ) # Transform CRS
+  )
+
+buffer <- terra::buffer(
+  terra::vect(coords),
+  width = 1000
+)
+
+lidar_crop <- terra::crop(
+  lidar_rast,
+  buffer,
+  snap = 'in',
+  mask = T
+)
+terra::plot(lidar_crop)
+
+ortho_crop <- terra::crop(
+  ortho_rast,
+  buffer,
+  snap = 'in',
+  mask = T
+)
+terra::plot(ortho_crop)
+```
+
+**Resample / Readjust resolution for ortho(higher resolution)**
+
+```{r}
+ortho_resampled <- terra::resample(
+  x = ortho_crop,
+  y = lidar_crop,
+  method = 'bilinear'
+)
+```
+
+**Save ortho as image and fill missing values**
+
+```{r}
+terra::writeRaster(
+  ortho_resampled,
+  'erasmusbridge.png',
+  overwrite = T
+)
+
+img <- png::readPNG(
+  'erasmusbridge.png'
+)
+
+lidar_crop_predict <- terra::focal(
+  lidar_crop,
+  w= 9,
+  fun = mean,
+  na.policy = 'only',
+  na.rm = T
+)
+terra::plot(lidar_crop_predict)
+
+# library(rgeos)
+
+lidar_crop_predict <- terra::ifel(
+  (is.na(lidar_crop_predict)),
+  -5.0796 ,
+  lidar_crop_predict
+) %>% 
+  terra::mask(.,buffer)
+terra::plot(lidar_crop_predict)
+```
+
+```{r}
+
+lidar_mat <- rayshader::raster_to_matrix(
+  lidar_crop_predict
+)
+
+
+lidar_mat %>% 
+  rayshader::height_shade() %>% 
+  rayshader::add_overlay(
+    img,
+    alphalayer = 1
+  ) %>% 
+  rayshader::plot_3d(
+    lidar_mat,
+    solid = F,
+    zscale = 1,
+    zoom = .6,
+    phi = 45,
+    theta = -30,
+    windowsize = 800
+  )
+```
+
+```{r}
+
+rayshader::render_highquality(
+  filename = "erasmusbridge-3d.png",
+  preview = T,
+  light = F,
+  environment_light = "air_museum_playground_4k.hdr",
+  intensity_env = 1,
+  # rotate_env = "",
+  parallel = T,
+  interactive = F,
+  width = 4000,
+  height = 4000
+)
+```
