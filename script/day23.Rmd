@@ -2,7 +2,7 @@
 
 ```{r}
 libs <- c(
-  "terra","sf"
+  "terra","sf","rayshader"
 )
 
 installed_libraries <- libs %in% rownames(
@@ -24,26 +24,23 @@ invisible(
 ```
 
 ```{r}
-# install.packages("remotes")
-# remotes::install_github("tylermorganwall/rayshader", force = T)
 
-# library(rayshader)
-
-# remove.packages('rayshader')
+# Need to downgrade rayshader to 0.35.7 in order to run
 # install.packages('devtools')
 # devtools::install_version("rayshader", version = "0.35.7", repos = "http://cran.r-project.org")
-library(rayshader)
-
-# remotes::install_github("tylermorganwall/rayrender", force = T)
+# library(rayshader)
 ```
 
 **Load LiDAR Raster data**
 
 ```{r}
 
-lidar_url <- 'https://ns_hwh.fundaments.nl/hwh-ahn/ahn4/03a_DSM_0.5m/R_37HN1.zip'
-lidar_file <- basename(lidar_url) # Get file name
+# lidar_url <- 'https://ns_hwh.fundaments.nl/hwh-ahn/ahn4/03a_DSM_0.5m/R_25GN1.zip' # Rijksmuseum
+# lidar_url <- 'https://ns_hwh.fundaments.nl/hwh-ahn/ahn4/03a_DSM_0.5m/R_37FZ1.zip' # Rotterdam Central Station
+# lidar_url <- 'https://ns_hwh.fundaments.nl/hwh-ahn/ahn4/03a_DSM_0.5m/R_37HN1.zip' # Erasmus Bridge
 
+lidar_url <- 'https://ns_hwh.fundaments.nl/hwh-ahn/ahn4/03a_DSM_0.5m/R_25GN1.zip'
+lidar_file <- basename(lidar_url) # Get file name
 options(timeout = max(1000, getOption("timeout"))) # increase max timeout
 download.file(
   url = lidar_url,
@@ -51,7 +48,6 @@ download.file(
   mode = 'wb'
 )
 unzip(lidar_file)
-
 lidar_rast <- terra::rast(
   paste0(
     gsub(
@@ -60,27 +56,79 @@ lidar_rast <- terra::rast(
       ),'.tif'
   )
 ) #  Import raster
+
+
+
+lidar_url1 <- 'https://ns_hwh.fundaments.nl/hwh-ahn/ahn4/03a_DSM_0.5m/R_25EZ1.zip'
+lidar_file1 <- basename(lidar_url1) # Get file name
+options(timeout = max(1000, getOption("timeout"))) # increase max timeout
+download.file(
+  url = lidar_url1,
+  destfile = lidar_file1,
+  mode = 'wb'
+)
+unzip(lidar_file1)
+lidar_rast1 <- terra::rast(
+  paste0(
+    gsub(
+      '\\..*',"",
+      lidar_file1
+      ),'.tif'
+  )
+) #  Import raster
+
+lidar_rast <- terra::merge(lidar_rast,lidar_rast1)
 ```
 
 **Load ortho Raster data**
 
 ```{r}
+# ortho_rast <- terra::rast(
+#   'https://geotiles.citg.tudelft.nl/Luchtfoto_2023/RGB_37HN1.tiff'
+# ) # Erasmus Bridge
+
+# ortho_rast <- terra::rast(
+#  'https://geotiles.citg.tudelft.nl/Luchtfoto_2023/RGB_37FZ1.tiff'
+# ) # Rotterdam Centraal Station
+
+# ortho_rast <- terra::rast(
+#  'https://geotiles.citg.tudelft.nl/Luchtfoto_2023/RGB_25GN1.tiff'
+# ) # Rijksmuseum
 
 ortho_rast <- terra::rast(
-  'https://geotiles.citg.tudelft.nl/Luchtfoto_2023/RGB_37HN1.tiff'
+ 'https://geotiles.citg.tudelft.nl/Luchtfoto_2023/RGB_25GN1.tiff'
 )
-
-ortho_rast
+ortho_rast1 <- terra::rast(
+ 'https://geotiles.citg.tudelft.nl/Luchtfoto_2023/RGB_25EZ1.tiff'
+)
+ortho_rast <- terra::merge(ortho_rast,ortho_rast1)
 ```
 
-**Crop area around Erasmus Bridge**
+**Crop area around**
 
 ```{r}
 
+
 coords <- data.frame(
-  long = 4.4822212,
-  lat = 51.9090041
-) %>% 
+  long = 4.894401283500065,
+  lat = 52.373712481749244
+) %>% # Amsterdam
+
+# coords <- data.frame(
+#   long = 4.885186777674753,
+#   lat = 52.35999248987765
+# ) %>% # Rijksmuseum
+
+# coords <- data.frame(
+#   long = 4.469394,
+#   lat = 51.924980
+# ) %>% # Centraal Station
+
+# coords <- data.frame(
+#   long = 4.4822212,
+#   lat = 51.9090041
+# ) %>% # Erasmus Bridge
+  
   sf::st_as_sf(
     coords = c(
       "long","lat"
@@ -95,7 +143,7 @@ coords <- data.frame(
 
 buffer <- terra::buffer(
   terra::vect(coords),
-  width = 1000
+  width = 300
 )
 
 lidar_crop <- terra::crop(
@@ -130,12 +178,12 @@ ortho_resampled <- terra::resample(
 ```{r}
 terra::writeRaster(
   ortho_resampled,
-  'erasmusbridge.png',
+  'amsterdam.png',
   overwrite = T
 )
 
 img <- png::readPNG(
-  'erasmusbridge.png'
+  'amsterdam.png'
 )
 
 lidar_crop_predict <- terra::focal(
@@ -147,11 +195,9 @@ lidar_crop_predict <- terra::focal(
 )
 terra::plot(lidar_crop_predict)
 
-# library(rgeos)
-
 lidar_crop_predict <- terra::ifel(
   (is.na(lidar_crop_predict)),
-  -5.0796 ,
+  -2 ,
   lidar_crop_predict
 ) %>% 
   terra::mask(.,buffer)
@@ -176,24 +222,26 @@ lidar_mat %>%
     solid = F,
     zscale = 1,
     zoom = .6,
-    phi = 45,
-    theta = -30,
-    windowsize = 800
+    shadow = T,
+    shadow_darkness = 1,
+    theta = -90, # rotate along z-axis 360-degree
+    phi = 30, # tilt back 0 is flat, max 90
+    windowsize = 1500
   )
 ```
 
 ```{r}
 
 rayshader::render_highquality(
-  filename = "erasmusbridge-3d.png",
+  filename = "amsterdam-3d.png",
   preview = T,
   light = F,
   environment_light = "air_museum_playground_4k.hdr",
   intensity_env = 1,
-  # rotate_env = "",
   parallel = T,
   interactive = F,
-  width = 4000,
-  height = 4000
+  rotate_env = 10,
+  width = 1000,
+  height = 1000
 )
 ```

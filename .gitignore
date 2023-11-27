@@ -91,3 +91,4 @@ atlassian-ide-plugin.xml
 .nbattrs
 *.json
 *.TIF
+*.xml
