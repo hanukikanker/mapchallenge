@@ -277,7 +277,7 @@ div#comparison figure div {
   background-image: url('map_2.png');
   background-size: cover;
   position: absolute;
-  width: 100%; 
+  width: 0%; 
   box-shadow: 0 5px 10px -2px rgba(0,0,0,0.3);
   overflow: hidden;
   bottom: 0;
@@ -360,7 +360,7 @@ ui <- shiny::fluidPage(
     <figure>
     <div id="divisor"></div>
     </figure>
-    <input type="range" min="0" max="100" value="0" id="slider"oninput="moveDivisor()">
+    <input type="range" min="0" max="100" value="10" id="slider"oninput="moveDivisor()">
   </div>'
   )
 )
